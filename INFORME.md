@@ -31,5 +31,7 @@ ls
 echo "Hola xv6"
 cat README
 
+Dejo fotos del progrma funcionando en la entrega.
+
 ## Problemas Encontrados
 No se presentaron problemas durante la instalación. El proceso fue exitoso sin necesidad de resolver errores o dependencias faltantes.
