@@ -85,6 +85,12 @@ main(int argc, char *argv[])
 
 Este código en C muestra el PID del proceso actual y el PID del proceso padre utilizando las llamadas al sistema getpid() y getppid(). Se imprimen ambos valores en la terminal, y luego el programa finaliza con exit(0).
 
+Agregar este archivo a MakeFIile para que este pueda ser compilado en el inicio del sistempa operativo
+
+```
+	$U/_getppidtest\
+```
+
 Aquí dejamos como queda en la consola:
 
 ```
@@ -215,6 +221,49 @@ int main(int argc, char *argv[]) {
 }
 ```
 
-Por ultimo cambiar el archivo MakeFile y agregar este
+Por ultimo cambiar el archivo MakeFile y agregar este archivo nuevo creado para que pueda ser compilado:
 
-Ahora probaremos esta nueva función
+```
+	$U/_getancestor\
+```
+
+Ahora probaremos esta nueva función en nuestro xv6:
+
+```
+xv6 kernel is booting
+
+hart 2 starting
+hart 1 starting
+init: starting sh
+$ getancestor 0
+Ancestro PID para el proceso 0: 3
+$ get ancestor 0
+exec get failed
+$ getancestor 0
+Ancestro PID para el proceso 0: 5
+$ getancestor 1
+Ancestro PID para el proceso 1: 2
+$ getancestor 2
+Ancestro PID para el proceso 2: 1
+$ getancestor 0
+Ancestro PID para el proceso 0: 8
+$ 
+```
+
+En la carpeta de "imagenespruebas" podemos encontrar estas imagenes de 
+
+## Explicación del ejercicio en las 2 partes.
+
+### getppid: 
+
+La llamada al sistema getppid en xv6 devuelve el PID del proceso padre del proceso actual. Se implementa accediendo al puntero del proceso padre dentro de la estructura del proceso actual (myproc()). La función simplemente retorna el PID del proceso padre, o -1 si no existe un padre, proporcionando una forma directa de obtener la relación de parentesco entre procesos.
+
+### getancestor: 
+
+La llamada al sistema getancestor permite obtener el PID de un ancestro del proceso actual en función del nivel indicado (0 para el proceso mismo, 1 para el padre, 2 para el abuelo). La función recorre la cadena de procesos padres hasta el ancestro solicitado, devolviendo su PID o -1 si el ancestro no existe, extendiendo la funcionalidad de getppid a múltiples generaciones de procesos.
+
+## Complicaciones del ejercicio
+
+En este ejercicio hecho tuve varios problemas con el uso de una función llamad argint para preguntar este argumento que nos pedia nuestro getancestor, no podía entender este problema y al intentar buscar una solución se me daba que esta función tendría que ser modificada como esta programada en el xv6.
+
+Luego de indagar en algunos problemas parecidos en StackOverflow entendía que no es un problema de la función solo que esta no podia ser ejecutada dentro de un if, por lo que despues de muchas vueltas se logro ejecutar simplemente sacando el argint de la función principal y agregando un & en el argumento.
