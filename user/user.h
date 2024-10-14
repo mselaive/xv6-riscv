@@ -24,6 +24,8 @@ int sleep(int);
 int uptime(void);
 int getppid(void);
 int getancestor(int);
+int getpriority(int pid);
+int getboost(int pid);
 
 
 

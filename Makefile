@@ -141,6 +141,7 @@ UPROGS=\
 	$U/_zombie\
 	$U/_getppidtest\
 	$U/_getancestor\
+	$U/_t2\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

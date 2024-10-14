@@ -120,3 +120,22 @@ sys_getancestor(int n)
     return -1;
   }
 }
+
+// sysproc.c
+
+uint64 sys_getpriority(void) {
+    int pid;
+    argint(0, &pid);
+    if (pid < 0)
+        return -1;
+    return obtener_prioridad(pid); // Llamar a la función renombrada
+}
+
+uint64 sys_getboost(void) {
+    int pid;
+    argint(0, &pid);
+    if (pid < 0)
+        return -1;
+    return obtener_boost(pid); // Llamar a la función renombrada
+}
+
