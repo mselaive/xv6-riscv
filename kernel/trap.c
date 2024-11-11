@@ -33,53 +33,62 @@ trapinithart(void)
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
 //
-void
-usertrap(void)
-{
+void usertrap(void) {
   int which_dev = 0;
 
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
 
-  // send interrupts and exceptions to kerneltrap(),
-  // since we're now in the kernel.
+  // Enviar interrupciones y excepciones a kerneltrap()
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
   
-  // save user program counter.
+  // Guardar el contador de programa del usuario.
   p->trapframe->epc = r_sepc();
   
+  // Verificar si la trampa es una llamada al sistema (syscall).
   if(r_scause() == 8){
-    // system call
+    // Llamada al sistema
 
     if(killed(p))
       exit(-1);
 
-    // sepc points to the ecall instruction,
-    // but we want to return to the next instruction.
+    // Ajustar el contador de programa para la siguiente instrucción después de la syscall.
     p->trapframe->epc += 4;
 
-    // an interrupt will change sepc, scause, and sstatus,
-    // so enable only now that we're done with those registers.
+    // Activar interrupciones solo después de completar el procesamiento de registros.
     intr_on();
 
     syscall();
+  } else if(r_scause() == 0xf) {
+    // Manejo de un fallo de página por escritura (Store/AMO page fault)
+    // Esto ocurre cuando el proceso intenta escribir en una página protegida
+
+    printf("usertrap: Store/AMO page fault at address 0x%lx\n", r_stval());
+
+    // No terminar el proceso, solo registrar el fallo y continuar
+    p->trapframe->epc += 4; // Continuar ejecución después de la instrucción que causó la trampa
+
   } else if((which_dev = devintr()) != 0){
-    // ok
+    // Interrupción de dispositivo manejada
+    // Ok
   } else {
+    // Manejo de trampas inesperadas
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
     setkilled(p);
   }
 
+  // Si el proceso ha sido marcado para ser terminado, realizar la salida.
   if(killed(p))
     exit(-1);
 
-  // give up the CPU if this is a timer interrupt.
+  // Si la interrupción fue un temporizador, ceder la CPU
   if(which_dev == 2)
     yield();
 
+  // Retornar a espacio de usuario
   usertrapret();
 }
 

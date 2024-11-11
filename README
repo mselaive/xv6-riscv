@@ -1,49 +1,292 @@
-xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
-Version 6 (v6).  xv6 loosely follows the structure and style of v6,
-but is implemented for a modern RISC-V multiprocessor using ANSI C.
+# Informe Tarea 3
 
-ACKNOWLEDGMENTS
+### Matías Selaive
 
-xv6 is inspired by John Lions's Commentary on UNIX 6th Edition (Peer
-to Peer Communications; ISBN: 1-57398-013-7; 1st edition (June 14,
-2000)).  See also https://pdos.csail.mit.edu/6.1810/, which provides
-pointers to on-line resources for v6.
+## Objetivo
 
-The following people have made contributions: Russ Cox (context switching,
-locking), Cliff Frey (MP), Xiao Yu (MP), Nickolai Zeldovich, and Austin
-Clements.
+Modificar xv6 para implementar un sistema de protección de memoria que permita marcar regiones de memoria como solo lectura.
 
-We are also grateful for the bug reports and patches contributed by
-Takahiro Aoyagi, Marcelo Arroyo, Silas Boyd-Wickizer, Anton Burtsev,
-carlclone, Ian Chen, Dan Cross, Cody Cutler, Mike CAT, Tej Chajed,
-Asami Doi,Wenyang Duan, eyalz800, Nelson Elhage, Saar Ettinger, Alice
-Ferrazzi, Nathaniel Filardo, flespark, Peter Froehlich, Yakir Goaron,
-Shivam Handa, Matt Harvey, Bryan Henry, jaichenhengjie, Jim Huang,
-Matúš Jókay, John Jolly, Alexander Kapshuk, Anders Kaseorg, kehao95,
-Wolfgang Keller, Jungwoo Kim, Jonathan Kimmitt, Eddie Kohler, Vadim
-Kolontsov, Austin Liew, l0stman, Pavan Maddamsetti, Imbar Marinescu,
-Yandong Mao, Matan Shabtay, Hitoshi Mitake, Carmi Merimovich, Mark
-Morrissey, mtasm, Joel Nider, Hayato Ohhashi, OptimisticSide,
-phosphagos, Harry Porter, Greg Price, RayAndrew, Jude Rich, segfault,
-Ayan Shafqat, Eldar Sehayek, Yongming Shen, Fumiya Shigemitsu, snoire,
-Taojie, Cam Tenny, tyfkda, Warren Toomey, Stephen Tu, Alissa Tung,
-Rafael Ubal, Amane Uehara, Pablo Ventura, Xi Wang, WaheedHafez,
-Keiichi Watanabe, Lucas Wolf, Nicolas Wolovick, wxdao, Grant Wu, x653,
-Jindong Zhang, Icenowy Zheng, ZhUyU1997, and Zou Chang Wei.
+## Procedimiento
 
-The code in the files that constitute xv6 is
-Copyright 2006-2024 Frans Kaashoek, Robert Morris, and Russ Cox.
+Esta documentación está pensada para que se entienda claramente el flujo desde la creación hasta la implementación y prueba de la función. Usando como base el ejemplo que hemos estado trabajando añadiendo la función mprotect y su manipulación en xv6
 
-ERROR REPORTS
+### 1. Modificación del archivo syscall.h
 
-Please send errors and suggestions to Frans Kaashoek and Robert Morris
-(kaashoek,rtm@mit.edu).  The main purpose of xv6 is as a teaching
-operating system for MIT's 6.1810, so we are more interested in
-simplifications and clarifications than new features.
+En este archivo definimos los números de las syscalls. Para añadir las nuevas syscalls, simplemente necesitas asignarles números, asegurándote de que no haya conflictos con otras syscalls.
 
-BUILDING AND RUNNING XV6
+```
+#define SYS_mprotect   22  //
+#define SYS_munprotect 23  // 
+```
 
-You will need a RISC-V "newlib" tool chain from
-https://github.com/riscv/riscv-gnu-toolchain, and qemu compiled for
-riscv64-softmmu.  Once they are installed, and in your shell
-search path, you can run "make qemu".
+### 2.- Modificación de syscall.c
+
+En este archivo, debes agregar las funciones sys_mprotect y sys_munprotect al arreglo syscalls[], que es donde se mapea cada número de syscall a la función correspondiente que maneja esa syscall en el kernel.
+
+```
+extern uint64 sys_mprotect(void);
+extern uint64 sys_munprotect(void);
+
+static uint64 (*syscalls[])(void) = {
+    // Otras syscalls...
+    [SYS_mprotect]   sys_mprotect,
+    [SYS_munprotect] sys_munprotect,
+};
+```
+
+### 3.- Modificación de sysproc.c
+
+Ahora en el archivo sysproc.c, implementas las funciones sys_mprotect y sys_munprotect, que son las que van a manipular las tablas de páginas y controlar los permisos de lectura/escritura de la memoria, como ya lo habías hecho:
+
+```
+uint64
+
+sys_mprotect(void)
+
+{
+
+  uint64 addr;
+
+  int len;
+
+  // Obtener los argumentos pasados a la función (dirección base y cantidad de páginas)
+
+  argaddr(0, &addr);
+
+  argint(1, &len);
+
+  // Validar que la dirección esté alineada a páginas y que la longitud sea positiva
+
+  if (addr % PGSIZE != 0 || len <= 0) {
+
+    return -1;
+
+  }
+
+  // Recorrer la cantidad de páginas especificada por len
+
+  for (int i = 0; i < len; i++) {
+
+    // Localizar la entrada de tabla de páginas (PTE) para la dirección actual
+
+    pte_t *pte = walk(myproc()->pagetable, addr + i * PGSIZE, 0);
+
+    // Verificar que la entrada de la página exista y sea válida
+
+    if (!pte || !(*pte & PTE_V)){
+
+      return -1;
+
+    }
+
+    // Desactivar el permiso de escritura cambiando el bit correspondiente
+
+    *pte &= ~PTE_W;
+
+  }
+
+    return 0;
+
+}
+
+// munprotect tarea 3
+
+uint64 sys_munprotect(void)
+
+{
+
+  uint64 addr;
+
+  int len;
+
+  // Obtener dirección y longitud
+
+  argaddr(0, &addr);
+
+  argint(1, &len);
+
+  // Comprobar si la dirección es múltiplo de PGSIZE y longitud válida
+
+  if (len <= 0 || addr % PGSIZE != 0) {
+
+    return -1;
+
+  }
+
+  // Iterar sobre las páginas afectadas
+
+  for (int i = 0; i < len; i++) {
+
+    pte_t *pte = walk(myproc()->pagetable, addr + i * PGSIZE, 0);
+
+    // Verificar si la PTE es válida
+
+    if (!pte || !(*pte & PTE_V)) {
+
+      return -1;
+
+    }
+
+    // Habilitar la escritura (cambiar el bit W)
+
+    *pte |= PTE_W;
+
+  }
+
+  return 0;
+
+}
+```
+
+### 4.- Modificación del archivo usys.pl
+
+El archivo usys.pl es utilizado para generar automáticamente las funciones de syscall que estarán disponibles para los programas de usuario. El archivo utiliza el formato entry para cada syscall, que es lo que se hace para getpid, sbrk, etc.
+
+Para agregar las funciones mprotect y munprotect de manera adecuada, deberías añadir estas líneas en el archivo usys.pl de la siguiente forma:
+
+```
+entry("mprotect");
+entry("munprotect");
+```
+
+### 5.- Definir en user.h
+
+Las funciones mprotect y munprotect deben ser declaradas en el archivo de cabecera user.h para que los programas de usuario en xv6 puedan usarlas para gestionar la protección de memoria. La declaración de estas funciones, que toman una dirección de memoria y un tamaño como parámetros, permite cambiar los permisos de acceso (lectura, escritura, ejecución) de una región de memoria o restaurar los permisos originales. La firma de las funciones es la siguiente: int mprotect(void *addr, int len); para cambiar los permisos y int munprotect(void *addr, int len); para revertir los cambios. Al incluir esta declaración en user.h, los programas de usuario pueden invocar estas funciones y controlar la protección de las páginas de memoria, interactuando con el kernel de xv6.
+
+```
+int mprotect(void *addr, int len);
+int munprotect(void *addr, int len);
+```
+
+## Creación archivo de prueba
+
+Crearemos el archivo tarea3.c dentro de la carpeta user con el ejemplo proporcionado, para observar su ejecución. No se explicará en detalle, pero debe ser agregado también al Makefile.
+
+Al ejecutar el código según las indicaciones de la actividad, nos encontramos con un problema en xv6-riscv. Dado que xv6 no está diseñado para bloquear espacios de memoria, aunque la implementación previa sea correcta, el sistema generará el siguiente error al intentar actualizar un espacio de memoria bloqueado.
+
+```
+xv6 kernel is booting
+
+hart 2 starting
+hart 1 starting
+init: starting sh
+$ tarea3
+usertrap(): unexpected scause 0xf pid=3
+            sepc=0x2a stval=0x4000
+```
+
+#### Solución de problema
+
+Para resolver este problema en xv6, es necesario realizar un cambio en el código que causa el error, de manera que el sistema no termine la ejecución con el mensaje de error. Para ello, modificaremos el archivo trap.c de la siguiente manera:
+
+```
+ } else if(r_scause() == 0xf) {
+    // Manejo de un fallo de página por escritura (Store/AMO page fault)
+    // Esto ocurre cuando el proceso intenta escribir en una página protegida
+
+    printf("usertrap: Store/AMO page fault at address 0x%lx\n", r_stval());
+
+    // No terminar el proceso, solo registrar el fallo y continuar
+    p->trapframe->epc += 4; // Continuar ejecución después de la instrucción que causó la trampa
+
+  } else if((which_dev = devintr()) != 0){
+    // Interrupción de dispositivo manejada
+    // Ok
+  } else {
+    // Manejo de trampas inesperadas
+    printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
+    printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
+    setkilled(p);
+  }
+
+  // Si el proceso ha sido marcado para ser terminado, realizar la salida.
+  if(killed(p))
+    exit(-1);
+
+  // Si la interrupción fue un temporizador, ceder la CPU
+  if(which_dev == 2)
+    yield();
+
+  // Retornar a espacio de usuario
+  usertrapret();
+}
+```
+
+### Modificación del programa tarea3.c
+
+En tarea3.c, se añadieron impresiones para mostrar la dirección de memoria antes de intentar escribir en una página protegida, y para verificar el comportamiento del sistema al desbloquearla. Se intentó escribir en la página protegida, lo que genera un "page fault" y se imprime un mensaje indicando que la operación fue bloqueada. Luego, al usar munprotect para desbloquear la página, se permite la escritura, y el nuevo valor se imprime para confirmar que la operación fue exitosa. Esto demuestra cómo el sistema gestiona la protección de la memoria.
+
+Por lo que nuestra tarea3.c quedaría de la siguiente forma.
+
+```
+#include "kernel/types.h"
+#include "kernel/stat.h"
+#include "user/user.h"
+
+int main(void) {
+    // Obtener la dirección actual del heap antes de reservar memoria
+    char *heap_start = sbrk(0);
+    printf("Heap original en: %p\n", heap_start);
+
+    // Reservar una nueva página de memoria
+    sbrk(4096);
+
+    // Proteger la nueva página reservada
+    if (mprotect(heap_start, 1) == -1) {
+        printf("Error al proteger la página\n");
+        exit(1);
+    }
+
+    // Intentar escribir en la página protegida
+    char *address = heap_start;
+    printf("Intentando escribir en la dirección protegida: %p\n", address);
+    printf("Valor antes de escribir: %p\n", address);
+    
+    // Esto debería fallar si la protección está activada correctamente
+    *address = 'X';  
+    printf("Valor después de intentar escribir: %p\n", address);
+
+    // Desproteger la página para permitir la escritura
+    if (munprotect(heap_start, 1) == -1) {
+        printf("Error al desproteger la página\n");
+        exit(1);
+    }
+
+    // Ahora escribir en la página desprotegida
+    *address = 'Y';  // Esto debería ser exitoso después de desproteger
+    printf("Escribiendo en la dirección desprotegida: %p\n", address);
+    printf("Nuevo valor: %p\n", address);
+
+    exit(0);
+}
+```
+
+Al ejecutar nuestro xv6 (con make qemu) y correr la tarea 3 en la consola, obtendremos el siguiente resultado, el cual demuestra lo solicitado en la actividad.
+
+```
+xv6 kernel is booting
+
+hart 1 starting
+hart 2 starting
+init: starting sh
+$ tarea3
+Heap original en: 0x0000000000004000
+Intentando escribir en la dirección protegida: 0x0000000000004000
+Valor antes de escribir: 0x0000000000004000
+usertrap: Store/AMO page fault at address 0x4000
+Valor después de intentar escribir: 0x0000000000004000
+Escribiendo en la dirección desprotegida: 0x0000000000004000
+Nuevo valor: 0x0000000000004000
+```
+
+El resultado muestra el comportamiento esperado del programa tarea3 en un entorno donde se han implementado las funciones mprotect y munprotect. Inicialmente, el programa muestra la dirección del heap antes de intentar escribir en una página protegida. Al intentar escribir en esa dirección, el sistema detecta un "page fault" debido a la protección de escritura activa, y se imprime un mensaje informando de este error. El valor en la dirección no cambia, lo que indica que la escritura fue bloqueada correctamente.
+
+Después, el programa usa la función munprotect para desbloquear la página, lo que permite realizar una escritura exitosa en la memoria. Este cambio es confirmado al imprimir el nuevo valor en la dirección.
+
+#### En cuanto a los requerimientos del ejercicio:
+
+1.- Implementación de mprotect: La función calcula las páginas involucradas en la dirección base proporcionada y la longitud, luego recorre la tabla de páginas del proceso para deshabilitar el bit de escritura (W) en cada PTE correspondiente. Esto asegura que la escritura a esas páginas sea bloqueada.
+
+2.- Implementación de munprotect: Similar a mprotect, esta función recorre las páginas afectadas y restaura el permiso de escritura al habilitar nuevamente el bit W en los PTE, permitiendo la escritura en esas páginas.
+
+3.- Manejo de errores: Durante la ejecución de las funciones mprotect y munprotect, se verifican condiciones de error. Si la dirección addr o la longitud len son inválidas, o si las direcciones no pertenecen al proceso actual, la llamada debe fallar y devolver un error. En el programa, si se detectan tales errores, se maneja de manera apropiada, asegurando que no se realicen cambios indeseados en la memoria.

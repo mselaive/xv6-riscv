@@ -41,3 +41,8 @@ void *memcpy(void *, const void *, uint);
 // umalloc.c
 void* malloc(uint);
 void free(void*);
+
+//tarea 3
+int mprotect(void *addr, int len);
+int munprotect(void *addr, int len);
+

@@ -91,3 +91,69 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// mprotect tarea 3
+
+uint64
+sys_mprotect(void)
+{
+  uint64 addr;
+  int len;
+
+  // Obtener los argumentos pasados a la función (dirección base y cantidad de páginas)
+  argaddr(0, &addr);
+  argint(1, &len);
+
+  // Validar que la dirección esté alineada a páginas y que la longitud sea positiva
+  if (addr % PGSIZE != 0 || len <= 0) {
+    return -1;
+  }
+
+  // Recorrer la cantidad de páginas especificada por len
+  for (int i = 0; i < len; i++) {
+
+    // Localizar la entrada de tabla de páginas (PTE) para la dirección actual
+    pte_t *pte = walk(myproc()->pagetable, addr + i * PGSIZE, 0);
+    
+    // Verificar que la entrada de la página exista y sea válida
+    if (!pte || !(*pte & PTE_V)){
+      return -1;
+    }
+
+    // Desactivar el permiso de escritura cambiando el bit correspondiente
+    *pte &= ~PTE_W;
+  }
+    return 0;
+}
+
+// munprotect tarea 3
+
+uint64 sys_munprotect(void)
+{
+  uint64 addr;
+  int len;
+
+  // Obtener dirección y longitud
+  argaddr(0, &addr);
+  argint(1, &len);
+
+  // Comprobar si la dirección es múltiplo de PGSIZE y longitud válida
+  if (len <= 0 || addr % PGSIZE != 0) {
+    return -1;
+  }
+
+  // Iterar sobre las páginas afectadas
+  for (int i = 0; i < len; i++) {
+    pte_t *pte = walk(myproc()->pagetable, addr + i * PGSIZE, 0);
+
+    // Verificar si la PTE es válida
+    if (!pte || !(*pte & PTE_V)) {
+      return -1;
+    }
+
+    // Habilitar la escritura (cambiar el bit W)
+    *pte |= PTE_W;
+  }
+  return 0;
+}
+
