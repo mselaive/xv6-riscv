@@ -14,6 +14,7 @@ Esta documentación está pensada para que se entienda claramente el flujo desde
 
 En este archivo definimos los números de las syscalls. Para añadir las nuevas syscalls, simplemente necesitas asignarles números, asegurándote de que no haya conflictos con otras syscalls.
 
+
 ```
 #define SYS_mprotect   22  //
 #define SYS_munprotect 23  // 
@@ -290,3 +291,4 @@ Después, el programa usa la función munprotect para desbloquear la página, lo
 2.- Implementación de munprotect: Similar a mprotect, esta función recorre las páginas afectadas y restaura el permiso de escritura al habilitar nuevamente el bit W en los PTE, permitiendo la escritura en esas páginas.
 
 3.- Manejo de errores: Durante la ejecución de las funciones mprotect y munprotect, se verifican condiciones de error. Si la dirección addr o la longitud len son inválidas, o si las direcciones no pertenecen al proceso actual, la llamada debe fallar y devolver un error. En el programa, si se detectan tales errores, se maneja de manera apropiada, asegurando que no se realicen cambios indeseados en la memoria.
+
