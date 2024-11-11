@@ -14,10 +14,11 @@ Esta documentación está pensada para que se entienda claramente el flujo desde
 
 En este archivo definimos los números de las syscalls. Para añadir las nuevas syscalls, simplemente necesitas asignarles números, asegurándote de que no haya conflictos con otras syscalls.
 
-
 ```
+
 #define SYS_mprotect   22  //
 #define SYS_munprotect 23  // 
+
 ```
 
 ### 2.- Modificación de syscall.c
