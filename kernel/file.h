@@ -21,6 +21,8 @@ struct inode {
   struct sleeplock lock; // protects everything below here
   int valid;          // inode has been read from disk?
 
+  int permissions;    //permisos para chmod tarea 4
+
   short type;         // copy of disk inode
   short major;
   short minor;

@@ -301,8 +301,7 @@ create(char *path, short type, short major, short minor)
   return 0;
 }
 
-uint64
-sys_open(void)
+uint64 sys_open(void)
 {
   char path[MAXPATH];
   int fd, omode;
@@ -310,37 +309,60 @@ sys_open(void)
   struct inode *ip;
   int n;
 
+  // Obtener argumentos
   argint(1, &omode);
   if((n = argstr(0, path, MAXPATH)) < 0)
     return -1;
 
   begin_op();
 
+  // Si el archivo se va a crear, se crea con permisos de lectura y escritura (3)
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
       end_op();
       return -1;
     }
+    ip->permissions = 3;  // Establecer permisos por defecto: lectura y escritura
   } else {
+    // Buscar el archivo por su nombre
     if((ip = namei(path)) == 0){
       end_op();
       return -1;
     }
     ilock(ip);
+
+    // Verificar si el archivo es un directorio y si el modo es incompatible
     if(ip->type == T_DIR && omode != O_RDONLY){
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+
+    // Verificar si los permisos del archivo permiten la operación solicitada
+    if((omode & O_WRONLY) && !(ip->permissions & 2)) {
+      // Se solicita escritura, pero el archivo no tiene permisos de escritura
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+
+    if((omode & O_RDONLY) && !(ip->permissions & 1)) {
+      // Se solicita lectura, pero el archivo no tiene permisos de lectura
       iunlockput(ip);
       end_op();
       return -1;
     }
   }
 
+  // Comprobación de dispositivo, si es un dispositivo
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op();
     return -1;
   }
 
+  // Asignación del descriptor de archivo
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -349,6 +371,7 @@ sys_open(void)
     return -1;
   }
 
+  // Asignación de tipo de archivo
   if(ip->type == T_DEVICE){
     f->type = FD_DEVICE;
     f->major = ip->major;
@@ -356,19 +379,23 @@ sys_open(void)
     f->type = FD_INODE;
     f->off = 0;
   }
+
   f->ip = ip;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
 
+  // Si se va a truncar un archivo normal
   if((omode & O_TRUNC) && ip->type == T_FILE){
     itrunc(ip);
   }
 
+  // Liberar el inode
   iunlock(ip);
   end_op();
 
   return fd;
 }
+
 
 uint64
 sys_mkdir(void)
@@ -501,5 +528,43 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+// sysfile.c
+uint64 sys_chmod(void)
+{
+  char path[MAXPATH];
+  int mode;
+  struct inode *ip;
+
+  // Obtener los argumentos
+  argstr(0, path, MAXPATH);
+  argint(1, &mode);
+
+  if(mode < 0) {
+    return -1;
+  }
+
+  begin_op();
+  if((ip = namei(path)) == 0) {
+    end_op();
+    return -1;
+  }
+  ilock(ip);
+
+ // Verificar si el archivo tiene el permiso inmutable
+  if (ip->permissions == 5) {
+    printf("chmod: no se puede modificar el permiso de un archivo inmutable\n");
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  // Cambiar los permisos del archivo
+  ip->permissions = mode;
+  iupdate(ip);
+
+  iunlockput(ip);
+  end_op();
   return 0;
 }
